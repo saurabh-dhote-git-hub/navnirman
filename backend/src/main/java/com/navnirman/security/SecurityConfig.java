@@ -1,4 +1,3 @@
-
 package com.navnirman.security;
 
 import java.util.List;
@@ -21,34 +20,40 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    /**
+     * Password encoder used when creating and authenticating user accounts.
+     */
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12);
     }
 
+    /**
+     * Stateless API security configuration.
+     * Public endpoints remain public; all other endpoints require a valid JWT,
+     * and /api/admin/** additionally requires the ADMIN role.
+     */
     @Bean
     SecurityFilterChain filterChain(
             HttpSecurity http,
             JwtAuthenticationFilter jwt) throws Exception {
 
         return http
-                .cors(cors ->
-                        cors.configurationSource(corsConfigurationSource()))
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session ->
-                        session.sessionCreationPolicy(
-                                SessionCreationPolicy.STATELESS))
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Browser preflight requests must reach the CORS handler.
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        .requestMatchers(
-                                HttpMethod.OPTIONS, "/**"
-                        ).permitAll()
-
+                        // Health checks.
                         .requestMatchers(
                                 "/api/health",
                                 "/actuator/health"
                         ).permitAll()
 
+                        // Authentication and payment-provider webhook endpoints.
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/auth/register",
@@ -57,6 +62,7 @@ public class SecurityConfig {
                                 "/api/payments/webhook"
                         ).permitAll()
 
+                        // Public catalogue and subscription-plan endpoints.
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/categories",
@@ -65,22 +71,24 @@ public class SecurityConfig {
                                 "/api/subscriptions/plans"
                         ).permitAll()
 
-                        .requestMatchers("/api/auth/me")
-                        .authenticated()
+                        // Authenticated user endpoint.
+                        .requestMatchers("/api/auth/me").authenticated()
 
-                        .requestMatchers("/api/admin/**")
-                        .hasRole("ADMIN")
+                        // All administrative APIs require ROLE_ADMIN.
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-                        .anyRequest()
-                        .authenticated()
+                        // Everything else requires authentication.
+                        .anyRequest().authenticated()
                 )
-                .addFilterBefore(
-                        jwt,
-                        UsernamePasswordAuthenticationFilter.class
-                )
+                .addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 
+    /**
+     * CORS origins for local Vite development, Capacitor Android, and the
+     * production Cloudflare Pages site. The Pages origin must match the exact
+     * deployed hostname.
+     */
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
 
@@ -91,7 +99,8 @@ public class SecurityConfig {
                 "http://127.0.0.1:5173",
                 "http://localhost",
                 "https://localhost",
-                "capacitor://localhost"
+                "capacitor://localhost",
+                "https://navnirman.pages.dev"
         ));
 
         config.setAllowedMethods(List.of(
@@ -116,11 +125,11 @@ public class SecurityConfig {
                 "Content-Length"
         ));
 
+        // The app sends JWTs in the Authorization header, not cookies.
         config.setAllowCredentials(false);
 
         UrlBasedCorsConfigurationSource source =
                 new UrlBasedCorsConfigurationSource();
-
         source.registerCorsConfiguration("/**", config);
 
         return source;

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import "./admin.css";
 
-const API = "http://localhost:8080/api"; // Admin dashboard runs in the Windows browser, not the Android emulator.
+const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api"; // Production uses Cloudflare Pages env; local fallback supports development.
 const money = (paise) => `₹${(Number(paise || 0) / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 const date = (v) => v ? new Date(v).toLocaleDateString("en-IN") : "—";
 
@@ -128,7 +128,7 @@ export default function AdminApp() {
       {tab === "Users" && <section className="panel"><div className="panel-head"><div><small>ACCOUNTS</small><h2>Customers</h2></div><input className="search" placeholder="Search customers…" value={query} onChange={e=>setQuery(e.target.value)}/></div><DataTable headers={["Customer","Mobile","Joined","Status"]} rows={filteredUsers.map(u=>[<><b>{u.fullName}</b><small className="subline">{u.email}</small></>,u.mobileNumber,date(u.createdAt),u.enabled?"Enabled":"Disabled"])}/></section>}
       {tab === "Subscriptions" && <section className="panel"><div className="panel-head"><div><small>MEMBERSHIP</small><h2>Subscriptions</h2></div><button className="primary compact" onClick={()=>setModal("grant")}>Grant subscription +</button></div><DataTable headers={["Customer","Plan","Status","Start","End","Access"]} rows={subscriptions.map(s=>[<><b>{s.fullName}</b><small className="subline">{s.email}</small></>,s.planName,s.status,date(s.startsAt),date(s.endsAt),s.active?"Active":"Inactive"])}/></section>}
       {tab === "Analytics" && <div className="stats-grid">{[["Customers",analytics?.totalCustomers],["Active subscriptions",analytics?.activeSubscriptions],["Successful payments",analytics?.paidOrders],["Failed payments",analytics?.failedOrders],["Paid revenue",money(analytics?.revenuePaise)]].map(([l,v])=><div className="stat-card" key={l}><small>{l}</small><strong>{v ?? "—"}</strong></div>)}</div>}
-      <footer className="admin-footer">Navnirman Admin · Local PC environment · Data from your Spring Boot backend</footer>
+      <footer className="admin-footer">Navnirman Admin · Secure administration · Data from your Spring Boot backend</footer>
     </main>
     {modal && <div className="modal-backdrop"><div className="modal"><div className="panel-head"><h2>{modal==="video"?"Upload video":modal==="category"?"Create category":"Grant subscription"}</h2><button className="close" onClick={()=>setModal("")}>×</button></div>
       {modal==="category" && <form onSubmit={createCategory}><label>Name<input required value={categoryForm.name} onChange={e=>setCategoryForm({...categoryForm,name:e.target.value,slug:categoryForm.slug||e.target.value.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"")})}/></label><label>Slug<input required value={categoryForm.slug} onChange={e=>setCategoryForm({...categoryForm,slug:e.target.value})}/></label><label>Description<textarea value={categoryForm.description} onChange={e=>setCategoryForm({...categoryForm,description:e.target.value})}/></label><button className="primary">Create category</button></form>}
