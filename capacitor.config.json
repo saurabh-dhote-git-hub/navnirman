@@ -1,0 +1,11 @@
+{
+  "appId": "com.navnirman.app",
+  "appName": "Navnirman",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "http"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

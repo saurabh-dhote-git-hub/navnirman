@@ -1,0 +1,46 @@
+# Node dependencies
+node_modules/
+
+# Frontend build output
+dist/
+build/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Java / Maven
+target/
+*.class
+*.jar
+*.war
+
+# Android build output
+android/.gradle/
+android/**/build/
+android/local.properties
+android/captures/
+
+# Video and uploaded media
+storage/
+uploads/
+*.mp4
+*.mov
+*.mkv
+
+# Certificates and private keys
+*.pem
+*.key
+*.p12
+*.jks
+
+# IDE and operating system
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
