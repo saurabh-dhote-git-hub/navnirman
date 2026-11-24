@@ -1,18 +1,28 @@
 # Navnirman Backend
 
+## Video storage: local or Cloudflare R2
 
-## v0.7.1 – Razorpay webhook reliability
+Local development uses `./storage/videos` by default. To enable Cloudflare R2, configure these environment variables:
 
-- The webhook endpoint validates `X-Razorpay-Signature` against the exact raw request body using `RAZORPAY_WEBHOOK_SECRET`.
-- It requires Razorpay's `X-Razorpay-Event-Id` header and records each event in `razorpay_webhook_events`.
-- Event IDs are inserted with MySQL `INSERT IGNORE`, so duplicate and concurrent deliveries of the same event ID are acknowledged without processing twice.
-- `payment.captured` is checked against the stored order ID, amount, currency, and captured status before activating the subscription.
-- `payment.failed` cannot change an already-paid order to failed.
-- Unsupported but validly signed events are recorded as ignored and acknowledged with HTTP 200.
-- Event recording and payment/subscription updates run in one transaction. If processing fails, the transaction rolls back so Razorpay can retry.
+- `R2_ENABLED=true`
+- `R2_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com`
+- `R2_REGION=auto`
+- `R2_BUCKET=navnirman-videos`
+- `R2_ACCESS_KEY_ID=<R2 access key ID>`
+- `R2_SECRET_ACCESS_KEY=<R2 secret access key>`
 
-### Razorpay webhook configuration
+Keep credentials in Render Environment Variables; never commit them.
 
-Configure the webhook URL as `https://<your-public-host>/api/payments/webhook` (for local testing, expose the local backend through a secure HTTPS tunnel). Subscribe to `payment.captured` and `payment.failed`. Configure the same webhook secret in the Razorpay dashboard and the backend environment variable `RAZORPAY_WEBHOOK_SECRET`.
+The existing `/api/admin/videos` upload endpoint stores the object in R2 when enabled. The existing `/api/videos/{id}/stream` endpoint continues enforcing publication and premium subscription checks and supports HTTP byte ranges. Video deletion removes the database record and the stored object.
 
-Do not use the API key secret as the webhook secret unless you intentionally configured both values to be identical. Never commit either secret.
+## Existing videos
+
+Existing database rows still point to their old `storedFilename` values. If their files existed only on a previous Render instance's local filesystem, those files may already be gone. Re-upload those videos through the admin dashboard after enabling R2. Do not delete old records until the replacement uploads have been checked.
+
+## Build
+
+```bash
+mvn clean package
+```
+
+The Dockerfile is at the backend root and builds `navnirman-api-0.7.1.jar`.

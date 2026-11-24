@@ -6,7 +6,7 @@ import org.springframework.core.io.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
-import java.nio.file.*;
+import java.io.InputStream;
 import java.util.*;
 import java.io.IOException;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,8 +15,11 @@ import org.springframework.security.core.Authentication;
 import com.navnirman.subscription.SubscriptionService;
 @RestController
 public class ContentController {
- private final ContentService service; private final Path storage; private final SubscriptionService subscriptions;
- public ContentController(ContentService s,SubscriptionService subscriptions,@Value("${app.storage.video-dir:./storage/videos}")String dir)throws IOException{service=s;this.subscriptions=subscriptions;storage=Paths.get(dir).toAbsolutePath().normalize();Files.createDirectories(storage);}
+ private final ContentService service; private final SubscriptionService subscriptions;
+ private final com.navnirman.storage.VideoStorageService storage;
+ public ContentController(ContentService s, SubscriptionService subscriptions, com.navnirman.storage.VideoStorageService storage) {
+  service=s; this.subscriptions=subscriptions; this.storage=storage;
+ }
  @GetMapping("/api/categories") public List<CategoryResponse> categories(){return service.categories(false);}
  @GetMapping("/api/videos") public List<VideoResponse> publicVideos(){return service.videos(false);}
  @GetMapping("/api/admin/dashboard") public DashboardResponse dashboard(){return service.dashboard();}
@@ -33,20 +36,19 @@ public class ContentController {
   if(file.isEmpty())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Choose a video file");
   String type=file.getContentType()==null?"":file.getContentType();
   if(!type.startsWith("video/"))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Only video files are allowed");
-  String ext=Optional.ofNullable(file.getOriginalFilename()).filter(n->n.contains(".")).map(n->n.substring(n.lastIndexOf('.'))).orElse(".mp4");
-  String stored=UUID.randomUUID()+ext.toLowerCase(Locale.ROOT);Path target=storage.resolve(stored).normalize();
-  if(!target.startsWith(storage))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Invalid filename");
-  try(var in=file.getInputStream()){Files.copy(in,target);}
+  String stored=storage.store(file);
   try{
    var v=new VideoItem(required(titleMr),required(titleHi),required(titleEn),descriptionMr,descriptionHi,descriptionEn,
     category(categoryId),file.getOriginalFilename()==null?"video":file.getOriginalFilename(),stored,type,file.getSize(),thumbnailUrl,premium,published);
    return ResponseEntity.status(201).body(service.createVideo(v));
-  }catch(RuntimeException ex){Files.deleteIfExists(target);throw ex;}
+  }catch(RuntimeException ex){storage.delete(stored);throw ex;}
  }
  @PutMapping("/api/admin/videos/{id}") public VideoResponse updateVideo(@PathVariable Long id,@RequestBody VideoUpdateRequest r){
   return service.updateVideo(id,new ContentService.VideoUpdate(required(r.titleMr()),required(r.titleHi()),required(r.titleEn()),r.descriptionMr(),r.descriptionHi(),r.descriptionEn(),r.categoryId(),r.thumbnailUrl(),r.premium(),r.published()));
  }
- @DeleteMapping("/api/admin/videos/{id}") public ResponseEntity<Void> deleteVideo(@PathVariable Long id)throws IOException{var v=service.entity(id);Path p=storage.resolve(v.getStoredFilename()).normalize();service.deleteVideo(id);Files.deleteIfExists(p);return ResponseEntity.noContent().build();}
+ @DeleteMapping("/api/admin/videos/{id}") public ResponseEntity<Void> deleteVideo(@PathVariable Long id)throws IOException{
+  var v=service.entity(id); service.deleteVideo(id); storage.delete(v.getStoredFilename()); return ResponseEntity.noContent().build();
+ }
  @GetMapping("/api/videos/{id}/stream")
  public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> stream(
    @PathVariable Long id,
@@ -60,10 +62,9 @@ public class ContentController {
     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "An active Premium subscription is required");
   }
 
-  Path file = storage.resolve(entity.getStoredFilename()).normalize();
-  if (!file.startsWith(storage) || !Files.isRegularFile(file))
-   throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Video file not found");
-  long length = Files.size(file);
+  long length;
+  try { length = storage.size(entity.getStoredFilename()); }
+  catch (IOException ex) { throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Video file not found"); }
   if (length <= 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Video file is empty");
 
   long start = 0;
@@ -93,8 +94,7 @@ public class ContentController {
   final long offset = start;
   final long bytesToSend = end - start + 1;
   var body = (org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody) output -> {
-   try (var input = new java.io.RandomAccessFile(file.toFile(), "r")) {
-    input.seek(offset);
+   try (InputStream input = storage.openRange(entity.getStoredFilename(), offset, offset + bytesToSend - 1)) {
     byte[] buffer = new byte[64 * 1024];
     long remaining = bytesToSend;
     while (remaining > 0) {

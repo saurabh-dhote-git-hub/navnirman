@@ -25,6 +25,13 @@ app:
     expiry-check-delay-ms: ${SUBSCRIPTION_EXPIRY_CHECK_DELAY_MS:60000}
   storage:
     video-dir: ${VIDEO_STORAGE_DIR:./storage/videos}
+    r2:
+      enabled: ${R2_ENABLED:false}
+      endpoint: ${R2_ENDPOINT:}
+      region: ${R2_REGION:auto}
+      bucket: ${R2_BUCKET:}
+      access-key: ${R2_ACCESS_KEY_ID:}
+      secret-key: ${R2_SECRET_ACCESS_KEY:}
   jwt:
     secret: ${JWT_SECRET:local-development-only-secret-change-me-123456789}
     expiration-minutes: ${JWT_EXPIRATION_MINUTES:60}
